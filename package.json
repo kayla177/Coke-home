@@ -26,6 +26,8 @@
     "vite": "^5.4.11"
   },
   "dependencies": {
+    "active-win": "^8.2.1",
+    "electron-store": "^11.0.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   }

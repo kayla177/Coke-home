@@ -8,10 +8,21 @@ import {
   subscribePetState,
   type PetState
 } from './petState.js'
+import { bus, type AppClassification } from './events.js'
+import { pomodoro } from './pomodoro.js'
+import { startPetBrain } from './petBrain.js'
+import { startFocusWatcher } from './focusWatcher.js'
+import {
+  getClassification,
+  listClassifications,
+  listSeenApps,
+  setClassification
+} from './store.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-const PET_SIZE = 180
+const PET_WIDTH = 260
+const PET_HEIGHT = 220
 const PANEL_WIDTH = 360
 const PANEL_HEIGHT = 480
 
@@ -35,10 +46,10 @@ function createPetWindow(): BrowserWindow {
   const { workArea } = screen.getPrimaryDisplay()
 
   const win = new BrowserWindow({
-    width: PET_SIZE,
-    height: PET_SIZE,
-    x: workArea.x + workArea.width - PET_SIZE - 40,
-    y: workArea.y + workArea.height - PET_SIZE - 40,
+    width: PET_WIDTH,
+    height: PET_HEIGHT,
+    x: workArea.x + workArea.width - PET_WIDTH - 40,
+    y: workArea.y + workArea.height - PET_HEIGHT - 40,
     frame: false,
     transparent: true,
     hasShadow: false,
@@ -63,10 +74,6 @@ function createPetWindow(): BrowserWindow {
   // the renderer paints, so a brief flash isn't visible.
   win.show()
 
-  if (!app.isPackaged) {
-    win.webContents.openDevTools({ mode: 'detach' })
-  }
-
   win.webContents.on('render-process-gone', (_e, details) => {
     console.error('[pet] renderer gone:', details)
   })
@@ -75,6 +82,7 @@ function createPetWindow(): BrowserWindow {
   })
 
   subscribePetState(win)
+  bus.subscribeWindow(win)
 
   return win
 }
@@ -101,6 +109,7 @@ function createPanelWindow(): BrowserWindow {
 
   loadRenderer(win, 'panel')
   subscribePetState(win)
+  bus.subscribeWindow(win)
 
   win.on('blur', () => {
     if (!win.isDestroyed()) win.hide()
@@ -171,6 +180,21 @@ function registerIpc(): void {
   ipcMain.on('pet:drag-end', () => {
     dragOrigin = null
   })
+
+  ipcMain.handle('pomodoro:snapshot', () => pomodoro.snapshot())
+  ipcMain.on('pomodoro:start', () => pomodoro.start())
+  ipcMain.on('pomodoro:pause', () => pomodoro.pause())
+  ipcMain.on('pomodoro:resume', () => pomodoro.resume())
+  ipcMain.on('pomodoro:skip', () => pomodoro.skip())
+  ipcMain.on('pomodoro:reset', () => pomodoro.reset())
+
+  ipcMain.handle('focus:list-seen', () => listSeenApps())
+  ipcMain.handle('focus:list-classifications', () => listClassifications())
+  ipcMain.handle('focus:get-classification', (_e, name: string) => getClassification(name))
+  ipcMain.on('focus:set-classification', (_e, name: string, kind: AppClassification) => {
+    setClassification(name, kind)
+    bus.emit({ type: 'classifications.changed', classifications: listClassifications() })
+  })
 }
 
 app.whenReady().then(() => {
@@ -179,6 +203,8 @@ app.whenReady().then(() => {
   }
 
   registerIpc()
+  startPetBrain()
+  startFocusWatcher()
   petWindow = createPetWindow()
 
   createTray({

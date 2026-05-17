@@ -10,6 +10,13 @@ export type PetState =
   | 'distracted'
   | 'celebrating'
 
+export interface NotifyEvent {
+  type: 'notify'
+  text: string
+  kind: 'nudge' | 'cheer' | 'info'
+  ttlMs: number
+}
+
 const api = {
   togglePanel: (): void => {
     ipcRenderer.send('panel:toggle')
@@ -21,6 +28,13 @@ const api = {
     const handler = (_e: IpcRendererEvent, state: PetState) => cb(state)
     ipcRenderer.on('pet:state', handler)
     return () => ipcRenderer.off('pet:state', handler)
+  },
+  onNotify: (cb: (notify: NotifyEvent) => void): (() => void) => {
+    const handler = (_e: IpcRendererEvent, event: { type: string }) => {
+      if (event?.type === 'notify') cb(event as NotifyEvent)
+    }
+    ipcRenderer.on('app:event', handler)
+    return () => ipcRenderer.off('app:event', handler)
   },
   dragStart: (): void => {
     ipcRenderer.send('pet:drag-start')
